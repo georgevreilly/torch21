@@ -1,0 +1,24 @@
+load("@python_deps//:requirements.bzl", "requirement")
+
+py_library(
+    name = "init",
+    srcs = ["__init__.py"],
+)
+ 
+py_library(
+    name = "calc",
+    srcs = ["calc.py"],
+    deps = [
+        ":init",
+    ],
+)
+ 
+py_test(
+    name = "calc_test",
+    srcs = ["calc_test.py"],
+    deps = [
+        ":calc",
+        requirement("torch"),
+    ],
+    timeout = "short",
+)
