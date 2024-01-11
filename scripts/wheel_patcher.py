@@ -19,10 +19,11 @@ def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -
     try:
         with WheelFile(src_wheel) as w:
             old_dist_info_path = w.dist_info_path
-            namever = w.parsed_filename.group("namever")
-            new_dist_info_path = "{}+{}.dist-info".format(namever, suffix)
-            new_wheel_filename = "{namever}+{suffix}-{pyver}-{abi}-{plat}.whl".format(
-                namever=namever,
+            namever=w.parsed_filename.group("namever")
+            version = w.parsed_filename.group("ver")
+            new_dist_info_path = "{}{}.dist-info".format(namever, suffix)
+            new_wheel_filename = "{namever}{suffix}-{pyver}-{abi}-{plat}.whl".format(
+                namever=w.parsed_filename.group("namever"),
                 suffix=suffix,
                 pyver=w.parsed_filename.group("pyver"),
                 abi=w.parsed_filename.group("abi"),
@@ -42,12 +43,14 @@ def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -
             os.path.join(temp_dir, new_dist_info_path),
         )
 
+        # Update the METADATA file with the new version
         metadata_path = Path(temp_dir).joinpath(new_dist_info_path, "METADATA")
         metadata = []
         with metadata_path.open("r") as f:
             for line in f:
                 if line.startswith("Version:"):
-                    metadata.append(f"Version: {namever}+{suffix}\n")
+                    assert line == f"Version: {version}\n"
+                    metadata.append(f"Version: {version}{suffix}\n")
                     print(metadata[-1])
                 else:
                     metadata.append(line)
@@ -87,7 +90,10 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="The suffix to append to the wheel filename",
     )
-    return parser.parse_args()
+    namespace = parser.parse_args()
+    if not namespace.suffix.startswith("+"):
+        namespace.suffix = "+" + namespace.suffix
+    return namespace
 
 
 def main() -> int:
