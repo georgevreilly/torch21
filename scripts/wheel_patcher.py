@@ -19,7 +19,7 @@ def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -
     try:
         with WheelFile(src_wheel) as w:
             old_dist_info_path = w.dist_info_path
-            namever=w.parsed_filename.group("namever")
+            namever = w.parsed_filename.group("namever")
             version = w.parsed_filename.group("ver")
             new_dist_info_path = "{}{}.dist-info".format(namever, suffix)
             new_wheel_filename = "{namever}{suffix}-{pyver}-{abi}-{plat}.whl".format(
@@ -76,19 +76,23 @@ def parse_args() -> argparse.Namespace:
         "--patch-dir",
         "-p",
         required=True,
-        help="Directory containing patches to apply",
+        help="Directory containing patches to apply to the wheel",
     )
     parser.add_argument(
         "--dest-dir",
         "-d",
         default=".",
-        help="The directory to write the patched wheel to",
+        help="The directory to save the patched wheel",
     )
     parser.add_argument(
         "--suffix",
         "-s",
         required=True,
-        help="The suffix to append to the wheel filename",
+        help="The suffix to append to the version in the wheel filename. "
+        "A leading '+' will be added if not present. "
+        "For example, '--wheel torch-2.1.0-cp38-cp38-manylinux1_x86_64.whl --suffix stripe.4' "
+        "creates 'torch-2.1.0+stripe.4-cp38-cp38-manylinux1_x86_64.whl'. "
+        "This patched wheel can be installed with the requirement 'torch==2.1.0+stripe.4'.",
     )
     namespace = parser.parse_args()
     if not namespace.suffix.startswith("+"):
