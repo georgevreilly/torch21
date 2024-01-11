@@ -19,11 +19,10 @@ def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -
     try:
         with WheelFile(src_wheel) as w:
             old_dist_info_path = w.dist_info_path
-            new_dist_info_path = "{}+{}.dist-info".format(
-                w.parsed_filename.group("namever"), suffix
-            )
+            namever = w.parsed_filename.group("namever")
+            new_dist_info_path = "{}+{}.dist-info".format(namever, suffix)
             new_wheel_filename = "{namever}+{suffix}-{pyver}-{abi}-{plat}.whl".format(
-                namever=w.parsed_filename.group("namever"),
+                namever=namever,
                 suffix=suffix,
                 pyver=w.parsed_filename.group("pyver"),
                 abi=w.parsed_filename.group("abi"),
@@ -42,6 +41,19 @@ def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -
             os.path.join(temp_dir, old_dist_info_path),
             os.path.join(temp_dir, new_dist_info_path),
         )
+
+        metadata_path = Path(temp_dir).joinpath(new_dist_info_path, "METADATA")
+        metadata = []
+        with metadata_path.open("r") as f:
+            for line in f:
+                if line.startswith("Version:"):
+                    metadata.append(f"Version: {namever}+{suffix}\n")
+                    print(metadata[-1])
+                else:
+                    metadata.append(line)
+
+        with metadata_path.open("w") as f:
+            f.write("".join(metadata))
 
         with WheelFile(new_wheel_path, "w") as w:
             print(f"Repacking wheel as {new_wheel_path}")
