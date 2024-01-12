@@ -153,3 +153,16 @@ to the beginning of `third_party/requirements.txt`.
    as it uses the patched Torch wheel from the local package index.
 9. `ls -l $(bazel info output_base)/external/python_deps_torch`
    should show the patched wheel
+
+## Issues
+
+I have reported the following issues:
+
+pytorch:
+
+* [CUDA deps cannot be preloaded under Bazel](https://github.com/pytorch/pytorch/issues/117350).
+
+rules_python:
+
+* [pip_install_dependencies doesn't work with private package index repositories => Error downloading from files.pythonhosted.org](https://github.com/bazelbuild/rules_python/issues/1676) .
+* [Make it easier to load wheels from the local file system](https://github.com/bazelbuild/rules_python/issues/1689).
