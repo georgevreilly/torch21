@@ -5,9 +5,9 @@ Torch 2.1 and Bazel experiments.
 ## Torch 2.1 doesn't work with Bazel
 
 Torch 2.1 works fine if you install it and its CUDA dependencies
-into a single `site-packages` (e.g., in a virtualenv).
-It doesn't work with Bazel,
-as it installs each dependency into its own directory tree,
+into a **single `site-packages`** (e.g., in a virtualenv).
+Torch doesn't work with Bazel,
+as Bazel installs each dependency into its own directory tree,
 which is added to `PYTHONPATH`.
 
 Running the test from a virtualenv works on Linux:
@@ -110,10 +110,10 @@ reorders the preloading of `lib*.so` files slightly,
 so that they are topologically sorted.
 (This order was worked out by hand.)
 
-The patch can be applied by running [wheel_patcher](scripts/wheel_patcher.py):
+The patch can be applied by running [`patcher`](scripts/patcher):
 
 ```sh
-$ ./scripts/wheel_patcher.py --wheel /tmp/pypi/torch-2.1.0-cp38-cp38-manylinux1_x86_64.whl \
+$ ./scripts/patcher --wheel /tmp/pypi/torch-2.1.0-cp38-cp38-manylinux1_x86_64.whl \
     --suffix stripe.5 --dest-dir /tmp/pypi --patch-dir ./patches/torch-2.1.0
 ```
 
@@ -132,26 +132,31 @@ to create a package index on my filesystem,
 then adding a custom `--index-url`
 to the beginning of `third_party/requirements.txt`.
 
-1. `pip install pip2pi` in some virtualenv
-2. There's a [bug in pip2pi](https://github.com/wolever/pip2pi/issues/88#issuecomment-1886993187)
+1. There's a [bug in pip2pi](https://github.com/wolever/pip2pi/issues/88#issuecomment-1886993187)
    that needs to be patched;
    without it, the `triton` package will be mishandled.
-    * Apply the [5-dash patch](https://github.com/wolever/pip2pi/pull/89) by hand.
-      Change the `4` at L152 to `5` in
-      `$VIRTUAL_ENV/lib/python3.8/site-packages/libpip2pi/commands.py`
-3. Run `pip2pi /tmp/pypi -r third_party/requirements.txt`
+2. Apply the provided patch:
+
+```sh
+./scripts/patcher --wheel pip2pi-0.8.2-py2.py3-none-any.whl \
+    --patch-dir ./patches/pip2pi-0.8.2 --suffix 1
+```
+
+3. Install the patched wheel, `pip2pi-0.8.2+1-py2.py3-none-any.whl`,
+   into your virtualenv.
+4. Run `pip2pi /tmp/pypi -r third_party/requirements.txt`
    to create a local package index from all the requirements.
-4. Run `wheel_patcher --dest-dir /tmp/pypi --suffix stripe.5 ...`
+5. Run `patcher --dest-dir /tmp/pypi --suffix stripe.5 ...`
    to create a patched Torch wheel in `/tmp/pypi`.
-5. Run `dir2pi /tmp/pypi` to rebuild the local package index,
+6. Run `dir2pi /tmp/pypi` to rebuild the local package index,
    so that the patched wheel can be located.
-6. Add `--index-url=/tmp/pypi/simple`
+7. Add `--index-url=/tmp/pypi/simple`
    to the beginning of `third_party/requirements.txt`,
    then change the `torch` requirement to `torch==2.1.0+stripe.5`.
-7. `bazel clean --expunge`
-8. `bazel test //...` should now succeed,
+8. `bazel clean --expunge`
+9. `bazel test //...` should now succeed,
    as it uses the patched Torch wheel from the local package index.
-9. `ls -l $(bazel info output_base)/external/python_deps_torch`
+10. `ls -l $(bazel info output_base)/external/python_deps_torch`
    should show the patched wheel
 
 ## Issues
