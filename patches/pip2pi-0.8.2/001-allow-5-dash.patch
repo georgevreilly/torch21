@@ -1,0 +1,22 @@
+From 5bd8be63e2efd547b74913a259b2a344fd38b45a Mon Sep 17 00:00:00 2001
+From: Callum Noble <callum@notthesame.co.uk>
+Date: Mon, 13 May 2019 12:25:26 -0700
+Subject: [PATCH] Allow 5 dash in whl filename (#88)
+
+---
+ libpip2pi/commands.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libpip2pi/commands.py b/libpip2pi/commands.py
+index 28c0769..1817afe 100644
+--- a/libpip2pi/commands.py
++++ b/libpip2pi/commands.py
+@@ -145,7 +145,7 @@ def file_to_package(file, basedir=None):
+         to_safe_name = lambda x: x
+         to_safe_rest = lambda x: x
+     elif file_ext == ".whl":
+-        bits = file.rsplit("-", 4)
++        bits = file.rsplit("-", 5)
+         split = (bits[0], "-".join(bits[1:]))
+         to_safe_name = pkg_resources.safe_name
+         to_safe_rest = lambda x: x
