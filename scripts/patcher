@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+"""Apply patches to a Python wheel file."""
+
 from __future__ import annotations
 
 import argparse
@@ -7,62 +9,76 @@ import os
 import shutil
 import subprocess
 import tempfile
-
 from pathlib import Path
 
-from wheel.wheelfile import WheelFile
+from wheel.wheelfile import WheelFile  # type: ignore
 
 
-def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -> Path:
+def update_metadata_version(
+    wheel_dir: str, dist_info_path: str, version: str, suffix: str
+) -> None:
+    """Update dist-info/METADATA with the new version and suffix."""
+    metadata_path = Path(wheel_dir).joinpath(dist_info_path, "METADATA")
+    metadata = []
+    with metadata_path.open("r") as f:
+        for line in f:
+            if line.startswith("Version:"):
+                assert line == f"Version: {version}\n"
+                metadata.append(f"Version: {version}{suffix}\n")
+                print(metadata[-1])
+            else:
+                metadata.append(line)
+
+    with metadata_path.open("w") as f:
+        f.write("".join(metadata))
+
+
+def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -> tuple[Path, str]:
     temp_dir = tempfile.mkdtemp()
 
     try:
         with WheelFile(src_wheel) as w:
             old_dist_info_path = w.dist_info_path
-            namever = w.parsed_filename.group("namever")
-            version = w.parsed_filename.group("ver")
+            grp = w.parsed_filename.group
+            namever = grp("namever")
+            version = grp("ver")
+            if not suffix.startswith("+"):
+                suffix = "+" + suffix
+            if "+" in version:
+                # e.g., version='2.1.2+cu118'. Two '+'s are not allowed in the wheel filename.
+                suffix = suffix.replace("+", "_")
             new_dist_info_path = "{}{}.dist-info".format(namever, suffix)
+            requirement = f"{grp('name')}=={version}{suffix}"
             new_wheel_filename = "{namever}{suffix}-{pyver}-{abi}-{plat}.whl".format(
-                namever=w.parsed_filename.group("namever"),
+                namever=namever,
                 suffix=suffix,
-                pyver=w.parsed_filename.group("pyver"),
-                abi=w.parsed_filename.group("abi"),
-                plat=w.parsed_filename.group("plat"),
+                pyver=grp("pyver"),
+                abi=grp("abi"),
+                plat=grp("plat"),
             )
             new_wheel_path = dest_dir.joinpath(new_wheel_filename)
             print(f"Extracting {src_wheel} to {temp_dir}")
             w.extractall(temp_dir)
 
         for patch in sorted(os.listdir(patch_dir)):
-            patch = patch_dir.absolute().joinpath(patch)
-            print(f"Patching with {patch}")
-            subprocess.check_call(("patch", "-p1", "-i", str(patch)), cwd=temp_dir)
+            patch_path = patch_dir.absolute().joinpath(patch)
+            print(f"Patching with {patch_path}")
+            subprocess.check_call(
+                ("patch", "-p1", "-i", str(patch_path), "-V", "none"), cwd=temp_dir
+            )
 
         os.rename(
             os.path.join(temp_dir, old_dist_info_path),
             os.path.join(temp_dir, new_dist_info_path),
         )
 
-        # Update the METADATA file with the new version
-        metadata_path = Path(temp_dir).joinpath(new_dist_info_path, "METADATA")
-        metadata = []
-        with metadata_path.open("r") as f:
-            for line in f:
-                if line.startswith("Version:"):
-                    assert line == f"Version: {version}\n"
-                    metadata.append(f"Version: {version}{suffix}\n")
-                    print(metadata[-1])
-                else:
-                    metadata.append(line)
-
-        with metadata_path.open("w") as f:
-            f.write("".join(metadata))
+        update_metadata_version(temp_dir, new_dist_info_path, version, suffix)
 
         with WheelFile(new_wheel_path, "w") as w:
             print(f"Repacking wheel as {new_wheel_path}")
             w.write_files(temp_dir)
 
-        return new_wheel_path
+        return new_wheel_path, requirement
 
     finally:
         # Clean up the temporary directory
@@ -82,7 +98,7 @@ def parse_args() -> argparse.Namespace:
         "--dest-dir",
         "-d",
         default=".",
-        help="The directory to save the patched wheel",
+        help="The directory to save the patched wheel. Default: %(default)r",
     )
     parser.add_argument(
         "--suffix",
@@ -94,21 +110,22 @@ def parse_args() -> argparse.Namespace:
         "creates 'torch-2.1.0+stripe.4-cp38-cp38-manylinux1_x86_64.whl'. "
         "This patched wheel can be installed with the requirement 'torch==2.1.0+stripe.4'.",
     )
-    namespace = parser.parse_args()
-    if not namespace.suffix.startswith("+"):
-        namespace.suffix = "+" + namespace.suffix
-    return namespace
+    return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    new_wheel_path = patch_wheel(
+    new_wheel_path, requirement = patch_wheel(
         Path(args.wheel),
         Path(args.dest_dir),
         Path(args.patch_dir),
         args.suffix,
     )
-    print(f"Patched wheel written to {new_wheel_path}")
+    print(f"Patched wheel written to {new_wheel_path}\n")
+    print(
+        f"Use 'pip install {requirement}' to install the patched wheel\n"
+        + "after it has been uploaded to a Python package index."
+    )
     return 0
 
 
