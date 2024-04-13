@@ -6,12 +6,23 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 from wheel.wheelfile import WheelFile  # type: ignore
+
+
+def no_backup_option() -> list[str]:
+    tool_version = subprocess.check_output(("patch", "--version"))
+    if tool_version.startswith(b"GNU patch"):
+        return ["--no-backup-if-mismatch"]
+    elif tool_version.endswith(b"Apple\n"):
+        return ["--version-control", "none"]
+    else:
+        raise ValueError("Unknown 'patch' tool")
 
 
 def update_metadata_version(
@@ -60,12 +71,12 @@ def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -
             print(f"Extracting {src_wheel} to {temp_dir}")
             w.extractall(temp_dir)
 
+        discard_backups_option = no_backup_option()
         for patch in sorted(os.listdir(patch_dir)):
             patch_path = patch_dir.absolute().joinpath(patch)
-            print(f"Patching with {patch_path}")
-            subprocess.check_call(
-                ("patch", "-p1", "-i", str(patch_path), "-V", "none"), cwd=temp_dir
-            )
+            patch_cmd = ["patch", "--strip=1", f"--input={patch_path}"] + discard_backups_option
+            print(f"\t{shlex.join(patch_cmd)}")
+            subprocess.check_call(patch_cmd, cwd=temp_dir)
 
         os.rename(
             os.path.join(temp_dir, old_dist_info_path),
