@@ -16,7 +16,7 @@ from wheel.wheelfile import WheelFile  # type: ignore
 
 
 def no_backup_option(patch_prog: Path) -> list[str]:
-    tool_version = subprocess.check_output((patch_prog, "--version"))
+    tool_version = subprocess.check_output((str(patch_prog), "--version"))
     if tool_version.startswith(b"GNU patch "):
         return ["--no-backup-if-mismatch"]
     elif tool_version.endswith(b"Apple\n"):
@@ -76,7 +76,11 @@ def patch_wheel(
         discard_backups_option = no_backup_option(patch_prog)
         for patch in sorted(os.listdir(patch_dir)):
             patch_path = patch_dir.absolute().joinpath(patch)
-            patch_cmd = [str(patch_prog), "--strip=1", f"--input={patch_path}"] + discard_backups_option
+            patch_cmd = [
+                str(patch_prog),
+                "--strip=1",
+                f"--input={patch_path}",
+            ] + discard_backups_option
             print(f"\t{shlex.join(patch_cmd)}")
             subprocess.check_call(patch_cmd, cwd=temp_dir)
 
@@ -99,9 +103,10 @@ def patch_wheel(
 
 
 def parse_args() -> argparse.Namespace:
+    patch_prog = shutil.which("patch")
     parser = argparse.ArgumentParser(description="Patch a Python wheel file")
     parser.set_defaults(
-        patch_prog=Path(shutil.which("patch")),
+        patch_prog=Path(patch_prog) if patch_prog else None,
         dest_dir=".",
     )
     parser.add_argument("--wheel", "-w", required=True, help="The wheel file to patch")
@@ -132,7 +137,10 @@ def parse_args() -> argparse.Namespace:
         help="Path to 'patch' executable. Default: '%(default)s'.",
     )
     args = parser.parse_args()
-    args.patch_prog = Path(args.patch_prog)
+    if args.patch_prog:
+        args.patch_prog = Path(args.patch_prog)
+    else:
+        raise ValueError("Can't find 'patch'")
     return args
 
 
