@@ -15,9 +15,9 @@ from pathlib import Path
 from wheel.wheelfile import WheelFile  # type: ignore
 
 
-def no_backup_option() -> list[str]:
-    tool_version = subprocess.check_output(("patch", "--version"))
-    if tool_version.startswith(b"GNU patch"):
+def no_backup_option(patch_prog: Path) -> list[str]:
+    tool_version = subprocess.check_output((patch_prog, "--version"))
+    if tool_version.startswith(b"GNU patch "):
         return ["--no-backup-if-mismatch"]
     elif tool_version.endswith(b"Apple\n"):
         return ["--version-control", "none"]
@@ -44,7 +44,9 @@ def update_metadata_version(
         f.write("".join(metadata))
 
 
-def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -> tuple[Path, str]:
+def patch_wheel(
+    src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str, patch_prog: Path
+) -> tuple[Path, str]:
     temp_dir = tempfile.mkdtemp()
 
     try:
@@ -71,10 +73,10 @@ def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -
             print(f"Extracting {src_wheel} to {temp_dir}")
             w.extractall(temp_dir)
 
-        discard_backups_option = no_backup_option()
+        discard_backups_option = no_backup_option(patch_prog)
         for patch in sorted(os.listdir(patch_dir)):
             patch_path = patch_dir.absolute().joinpath(patch)
-            patch_cmd = ["patch", "--strip=1", f"--input={patch_path}"] + discard_backups_option
+            patch_cmd = [str(patch_prog), "--strip=1", f"--input={patch_path}"] + discard_backups_option
             print(f"\t{shlex.join(patch_cmd)}")
             subprocess.check_call(patch_cmd, cwd=temp_dir)
 
@@ -98,6 +100,10 @@ def patch_wheel(src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str) -
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Patch a Python wheel file")
+    parser.set_defaults(
+        patch_prog=Path(shutil.which("patch")),
+        dest_dir=".",
+    )
     parser.add_argument("--wheel", "-w", required=True, help="The wheel file to patch")
     parser.add_argument(
         "--patch-dir",
@@ -108,7 +114,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dest-dir",
         "-d",
-        default=".",
         help="The directory to save the patched wheel. Default: %(default)r",
     )
     parser.add_argument(
@@ -121,16 +126,24 @@ def parse_args() -> argparse.Namespace:
         "creates 'torch-2.1.0+stripe.4-cp38-cp38-manylinux1_x86_64.whl'. "
         "This patched wheel can be installed with the requirement 'torch==2.1.0+stripe.4'.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--patch-prog",
+        "-P",
+        help="Path to 'patch' executable. Default: '%(default)s'.",
+    )
+    args = parser.parse_args()
+    args.patch_prog = Path(args.patch_prog)
+    return args
 
 
 def main() -> int:
     args = parse_args()
     new_wheel_path, requirement = patch_wheel(
-        Path(args.wheel),
-        Path(args.dest_dir),
-        Path(args.patch_dir),
-        args.suffix,
+        src_wheel=Path(args.wheel),
+        dest_dir=Path(args.dest_dir),
+        patch_dir=Path(args.patch_dir),
+        suffix=args.suffix,
+        patch_prog=Path(args.patch_prog),
     )
     print(f"Patched wheel written to {new_wheel_path}\n")
     print(
