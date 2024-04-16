@@ -22,7 +22,8 @@ def no_backup_option(patch_prog: Path) -> list[str]:
     elif tool_version.endswith(b"Apple\n"):
         return ["--version-control", "none"]
     else:
-        raise ValueError("Unknown 'patch' tool")
+        print("Unknown 'patch' tool. Cannot determine no-backup option.")
+        return []
 
 
 def update_metadata_version(
@@ -45,7 +46,12 @@ def update_metadata_version(
 
 
 def patch_wheel(
-    src_wheel: Path, dest_dir: Path, patch_dir: Path, suffix: str, patch_prog: Path
+    src_wheel: Path,
+    dest_dir: Path,
+    patch_dir: Path,
+    suffix: str,
+    patch_prog: Path,
+    strip_count: int,
 ) -> tuple[Path, str]:
     temp_dir = tempfile.mkdtemp()
 
@@ -78,7 +84,7 @@ def patch_wheel(
             patch_path = patch_dir.absolute().joinpath(patch)
             patch_cmd = [
                 str(patch_prog),
-                "--strip=1",
+                f"--strip={strip_count}",
                 f"--input={patch_path}",
             ] + discard_backups_option
             print(f"\t{shlex.join(patch_cmd)}")
@@ -108,6 +114,7 @@ def parse_args() -> argparse.Namespace:
     parser.set_defaults(
         patch_prog=Path(patch_prog) if patch_prog else None,
         dest_dir=".",
+        strip_count=1,
     )
     parser.add_argument("--wheel", "-w", required=True, help="The wheel file to patch")
     parser.add_argument(
@@ -136,6 +143,10 @@ def parse_args() -> argparse.Namespace:
         "-P",
         help="Path to 'patch' executable. Default: '%(default)s'.",
     )
+    parser.add_argument(
+        "--strip-count",
+        help="Number of leading path components to strip from filenames in the patch. Default: %(default)d.",
+    )
     args = parser.parse_args()
     if args.patch_prog:
         args.patch_prog = Path(args.patch_prog)
@@ -152,6 +163,7 @@ def main() -> int:
         patch_dir=Path(args.patch_dir),
         suffix=args.suffix,
         patch_prog=Path(args.patch_prog),
+        strip_count=args.strip_count,
     )
     print(f"Patched wheel written to {new_wheel_path}\n")
     print(
